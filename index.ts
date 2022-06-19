@@ -1,7 +1,7 @@
 import http from 'http';
 import dotenv from 'dotenv';
 import {IUser} from './utils/types';
-import {users, get_users, get_user, add_user} from "./src/users";
+import {get_users, get_user, add_user, update_user, delete_user} from "./src/users";
 import {API_URL} from "./utils/constants";
 import {v4 as uuid, validate} from 'uuid';
 import {isUser} from "./utils/check";
@@ -15,12 +15,13 @@ const server = http.createServer(async (request, response) => {
         switch (request.method) {
             case 'GET':
                 if (request.url === API_URL) {
-                    response.writeHead(200, {'Content-Type': 'text/html'});
-                    response.end(`<h1>${get_users()}</h1>`);
+                    console.log("get");
+                    console.log(get_users());
+                    response.writeHead(200, {'Content-Type': 'application/json'});
+                    response.end(JSON.stringify(get_users()));
                 } else if (request.url?.startsWith(API_URL)) {
                     const id = request.url.split("/")[3];
                     if (validate(id)) {
-                        response.writeHead(200, {'Content-Type': 'text/html'});
                         const user = get_user(id);
                         if (user) {
                             response.writeHead(200, {'Content-Type': 'application/json'});
@@ -41,7 +42,7 @@ const server = http.createServer(async (request, response) => {
             case 'POST':
                 if (request.url?.startsWith(API_URL)) {
                     let body = '';
-                    request.on('data', chunk => {
+                    await request.on('data', chunk => {
                         body += chunk.toString();
                     });
                     if(body) {
@@ -57,26 +58,79 @@ const server = http.createServer(async (request, response) => {
                                     user: {id, username, age, hobbies},
                                 })
                             );
+                            break;
                         } else {
-                            response.writeHead(400, {'Content-Type': 'text/html'});
+                            response.writeHead(400, {'Content-Type': 'application/json'});
                             response.end(`body does not contain required fields`);
+                            break;
                         }
                     }
                     else {
-                        response.writeHead(400, {'Content-Type': 'text/html'});
+                        response.writeHead(400, {'Content-Type': 'application/json'});
                         response.end(`body does not contain required fields`);
+                        break;
                     }
 
                 } else {
                     response.writeHead(404, {'Content-Type': 'application/json'});
                     response.end(`URL doesn't exist`);
+                    break;
                 }
             case 'PUT':
                 if (request.url?.startsWith(API_URL)) {
                     const id = request.url?.split("/")[3];
                     if (validate(id)) {
                         if (get_user(id)){
-
+                            let body = '';
+                            await request.on('data', chunk => {
+                                body += chunk.toString();
+                            });
+                            if(body) {
+                                const user: IUser = JSON.parse(body);
+                                if (isUser(user)) {
+                                    const {username, age, hobbies} = user;
+                                    update_user({id, username, age, hobbies});
+                                    response.writeHead(201, 'application/json')
+                                    response.end(
+                                        JSON.stringify({
+                                            message: 'user was updated',
+                                            user: {id, username, age, hobbies},
+                                        })
+                                    );
+                                    break;
+                                } else {
+                                    response.writeHead(400, {'Content-Type': 'application/json'});
+                                    response.end(`body does not contain required fields`);
+                                    break;
+                                }
+                            }
+                        } else {
+                            response.writeHead(404, {'Content-Type': 'application/json'});
+                            response.end(`User ID: ${id} doesn't exist`);
+                            break;
+                        }
+                    } else {
+                        response.writeHead(400, {'Content-Type': 'text/html'});
+                        response.end(`ID: ${id} is not valid`);
+                        break;
+                    }
+                } else {
+                    response.writeHead(404, {'Content-Type': 'application/json'});
+                    response.end(`URL doesn't exist`);
+                    break;
+                }
+            case 'DELETE':
+                if (request.url?.startsWith(API_URL)) {
+                    const id = request.url?.split("/")[3];
+                    if (validate(id)) {
+                        if(get_user(id)) {
+                            delete_user(id);
+                            response.writeHead(204, 'application/json')
+                            response.end(
+                                JSON.stringify({
+                                    message: 'user was deleted'
+                                })
+                            );
                         } else {
                             response.writeHead(404, {'Content-Type': 'application/json'});
                             response.end(`User ID: ${id} doesn't exist`);
@@ -91,8 +145,9 @@ const server = http.createServer(async (request, response) => {
                 }
         }
     } catch (e) {
-
+        response.writeHead(500, {'Content-Type': 'application/json'});
+        response.end(`server mistake was occurred`);
     }
 })
 
-server.listen(port, () => console.log(`server 1 2 3 4 5 started on port ${port}`));
+server.listen(port, () => console.log(`server started on port ${port}`));
